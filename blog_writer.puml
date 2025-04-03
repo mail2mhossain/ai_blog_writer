@@ -1,0 +1,116 @@
+@startuml AI Blog Writing
+
+title Blog Magic: AI-Driven Content Creation
+
+' Optionally define colors or shapes:
+skinparam class {
+  BackgroundColor #ADD1B2
+  BorderColor #333333
+  FontColor black
+}
+
+' Define each step as a class (node)
+class START << (S, #ADD1B2) >> 
+class Generate_Title << (R, #ADD1B2) >> {
+  Generate Title on given topic.
+}
+class Decompose_Theme << (R, #ADD1B2) >> {
+  Analyze and break down the given topic into a structured theme decomposition
+}
+
+note left of Decompose_Theme
+{
+    "core_themes": [
+        {
+            "theme": "string",
+            "description": "string",
+            "related_concepts": ["string", "string", "string"]
+        }
+    ],
+    "implied_topics": ["string"],
+    "scope_boundaries": ["string"]
+}
+end note
+
+class Analyze_Core_Themes << (R, #ADD1B2) >> {
+  Analyze core themes using the 5W's + H framework.
+}
+note left of Analyze_Core_Themes
+{
+    "theme_analysis": [
+        {
+            "theme_name": "Theme Name",
+            "who": ["point 1", "point 2", "point 3"],
+            "what": ["point 1", "point 2", "point 3"],
+            "where": ["point 1", "point 2", "point 3"],
+            "when": ["point 1", "point 2", "point 3"],
+            "why": ["point 1", "point 2", "point 3"],
+            "how": ["point 1", "point 2", "point 3"]
+        }
+    ]
+}
+end note
+
+
+class Analyze_Implied_Topics << (R, #ADD1B2) >> {
+  Analyze implied topics and their relationships to core themes.
+}
+
+note right of Analyze_Implied_Topics
+{
+    "implied_topic_analysis": [
+        {
+            "topic_name": "Topic Name",
+            "relevance": ["point 1", "point 2", "point 3"],
+            "considerations": ["point 1", "point 2", "point 3"],
+            "impact": ["point 1", "point 2", "point 3"],
+            "integration_points": ["point 1", "point 2", "point 3"]
+        }
+    ]
+}
+end note
+
+
+class Generate_Structured_Outline << (R, #ADD1B2) >> {
+  Generate a structured outline based on theme analysis and implied topic analysis.
+}
+
+class Research << (R, #ADD1B2) >> {
+  Research each section and subsection of the blog outline.
+}
+
+class Draft_Article << (R, #ADD1B2) >> {
+  Write a draft article based on research.
+}
+
+class Critique_Draft_Article << (R, #ADD1B2) >> {
+  Critique the draft article
+}
+
+class Revise_Article << (R, #ADD1B2) >> {
+  Revise article based on critique.
+}
+
+class Finalization_and_Proofreading << (R, #ADD1B2) >> {
+  Thoroughly proofread and finalize the blog post.
+}
+
+class END << (E, #ADD1B2) >>
+
+' Define transitions
+START --> Generate_Title
+Generate_Title --> Decompose_Theme
+Decompose_Theme --> Analyze_Core_Themes
+Decompose_Theme --> Analyze_Implied_Topics
+Analyze_Core_Themes --> Generate_Structured_Outline
+Analyze_Implied_Topics --> Generate_Structured_Outline
+Generate_Structured_Outline --> Research
+Research --> Draft_Article
+Draft_Article --> Critique_Draft_Article
+
+Critique_Draft_Article --> Finalization_and_Proofreading : If No "Critique" or revisions >= 3
+Critique_Draft_Article --> Revise_Article : If "Critique"
+Revise_Article --> Critique_Draft_Article 
+
+Finalization_and_Proofreading --> END
+@enduml

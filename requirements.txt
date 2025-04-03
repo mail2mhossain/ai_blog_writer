@@ -1,0 +1,16 @@
+langchain
+langchain-core
+langchain-openai
+langchain_community 
+langchain-ollama 
+langchain-experimental
+langgraph
+python-decouple
+streamlit
+pydantic
+tiktoken
+scikit-learn
+sentence-transformers
+docling
+huggingface_hub
+duckduckgo-search
