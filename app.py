@@ -341,6 +341,90 @@ def markdown_to_outline(markdown_text):
         st.error(f"Error converting markdown to outline: {str(e)}")
         return {'sections': []}
 
+# Callback functions for section and subsection operations
+def add_section():
+    if 'outline_data' not in st.session_state:
+        return
+    
+    # Get current outline data
+    outline_data = st.session_state['outline_data']
+    if 'sections' not in outline_data:
+        outline_data['sections'] = []
+    
+    # Add new section
+    new_section = {
+        'title': "New Section",
+        'key_points': ["Add key points here"],
+        'subsections': []
+    }
+    outline_data['sections'].append(new_section)
+    
+    # Update session state
+    st.session_state['outline_data'] = outline_data
+    st.session_state['outline'] = json.dumps(outline_data, indent=4)
+
+def delete_section(section_index):
+    if 'outline_data' not in st.session_state:
+        return
+    
+    # Get current outline data
+    outline_data = st.session_state['outline_data']
+    if 'sections' not in outline_data or section_index >= len(outline_data['sections']):
+        return
+    
+    # Remove the section
+    outline_data['sections'].pop(section_index)
+    
+    # Update session state
+    st.session_state['outline_data'] = outline_data
+    st.session_state['outline'] = json.dumps(outline_data, indent=4)
+
+def add_subsection(section_index):
+    if 'outline_data' not in st.session_state:
+        return
+    
+    # Get current outline data
+    outline_data = st.session_state['outline_data']
+    if 'sections' not in outline_data or section_index >= len(outline_data['sections']):
+        return
+    
+    # Get the section
+    section = outline_data['sections'][section_index]
+    if 'subsections' not in section:
+        section['subsections'] = []
+    
+    # Add new subsection
+    new_subsection = {
+        'title': "New Subsection",
+        'key_points': ["Add key points here"]
+    }
+    section['subsections'].append(new_subsection)
+    
+    # Update session state
+    st.session_state['outline_data'] = outline_data
+    st.session_state['outline'] = json.dumps(outline_data, indent=4)
+
+def delete_subsection(section_index, subsection_index):
+    if 'outline_data' not in st.session_state:
+        return
+    
+    # Get current outline data
+    outline_data = st.session_state['outline_data']
+    if 'sections' not in outline_data or section_index >= len(outline_data['sections']):
+        return
+    
+    # Get the section
+    section = outline_data['sections'][section_index]
+    if 'subsections' not in section or subsection_index >= len(section['subsections']):
+        return
+    
+    # Remove the subsection
+    section['subsections'].pop(subsection_index)
+    
+    # Update session state
+    st.session_state['outline_data'] = outline_data
+    st.session_state['outline'] = json.dumps(outline_data, indent=4)
+
 def execute_generate_outline():
     with st.spinner("Generating Outline..."):
         if 'edited_title' in st.session_state and st.session_state['edited_title']:
@@ -353,6 +437,9 @@ def execute_generate_outline():
                 # Store the outline in session state
                 st.session_state['outline'] = outline_json
                 print(f"\nBlog Outline:\n{st.session_state['outline']}")
+                
+                # Parse the outline JSON and store in session state
+                st.session_state['outline_data'] = json.loads(outline_json)
                 
                 # Convert to markdown for display and editing
                 markdown_outline = outline_to_markdown(outline)
@@ -411,6 +498,9 @@ def write_blog():
         # Submit button for generating outline
         if st.button("Submit Title"):
             if st.session_state['edited_title']:
+                # titles = []
+                # st.session_state['selected_title'] = ''
+                # st.session_state['edited_title'] = ''
                 execute_generate_outline()
             else:
                 st.error("Please enter a title before submitting.")
@@ -436,6 +526,33 @@ def write_blog():
                 sections = outline_data.get('sections', [])
                 updated_sections = []
                 
+                # Initialize state for section operations if not already present
+                if 'add_section_clicked' not in st.session_state:
+                    st.session_state['add_section_clicked'] = False
+                
+                if 'sections_to_delete' not in st.session_state:
+                    st.session_state['sections_to_delete'] = []
+                    
+                if 'add_subsection' not in st.session_state:
+                    st.session_state['add_subsection'] = {}
+                    
+                if 'delete_subsection' not in st.session_state:
+                    st.session_state['delete_subsection'] = {}
+                
+                # Handle adding a new section
+                if st.session_state.get('add_section_clicked', False):
+                    new_section = {
+                        'title': "New Section",
+                        'key_points': ["Add key points here"],
+                        'subsections': []
+                    }
+                    sections.append(new_section)
+                    st.session_state['add_section_clicked'] = False
+                
+                # Filter out sections marked for deletion
+                sections = [section for i, section in enumerate(sections) 
+                           if i not in st.session_state.get('sections_to_delete', [])]
+                
                 # For each section in the outline
                 for i, section in enumerate(sections):
                     with st.expander(f"Section {i+1}: {section.get('title', 'Untitled Section')}"):
@@ -452,6 +569,10 @@ def write_blog():
                                                         key=f"section_key_points_{i}")
                         # Process key points into a list
                         key_points_list = [point.strip() for point in section_key_points.split('\n') if point.strip()]
+                        
+                        # Delete section button
+                        if st.button(f"Delete Section {i+1}", key=f"delete_section_{i}", on_click=delete_section, args=(i,)):
+                            pass  # The on_click callback handles the deletion
                         
                         # Handle subsections
                         subsections = section.get('subsections', [])
@@ -478,9 +599,8 @@ def write_blog():
                                 subsection_key_points_list = [point.strip() for point in subsection_key_points.split('\n') if point.strip()]
                                 
                                 # Delete subsection button
-                                if st.button(f"Delete Subsection {j+1}", key=f"delete_subsection_{i}_{j}"):
-                                    # Skip adding this subsection to the updated list
-                                    continue
+                                if st.button(f"Delete Subsection {j+1}", key=f"delete_subsection_{i}_{j}", on_click=delete_subsection, args=(i, j)):
+                                    pass  # The on_click callback handles the deletion
                                 
                                 # Create updated subsection
                                 updated_subsection = {
@@ -490,33 +610,20 @@ def write_blog():
                                 updated_subsections.append(updated_subsection)
                         
                         # Add new subsection button
-                        if st.button(f"+ Add Subsection", key=f"add_subsection_{i}"):
-                            new_subsection = {
-                                'title': f"New Subsection",
-                                'key_points': ["Add key points here"]
-                            }
-                            updated_subsections.append(new_subsection)
+                        if st.button(f"+ Add Subsection", key=f"add_subsection_{i}", on_click=add_subsection, args=(i,)):
+                            pass  # The on_click callback handles the addition
                         
-                        # Delete section button
-                        # delete_section = st.button(f"Delete Section {i+1}", key=f"delete_section_{i}")
-                        
-                        # Create updated section
-                        # if not delete_section:  # Only add if not deleted
-                        #     updated_section = {
-                        #         'title': section_title,
-                        #         'key_points': key_points_list,
-                        #         'subsections': updated_subsections
-                        #     }
-                        #     updated_sections.append(updated_section)
+                        # Update section with changes
+                        section['title'] = section_title
+                        section['key_points'] = key_points_list
+                        section['subsections'] = updated_subsections
                 
                 # Add new section button
-                if st.button("+ Add Section"):
-                    new_section = {
-                        'title': "New Section",
-                        'key_points': ["Add key points here"],
-                        'subsections': []
-                    }
-                    updated_sections.append(new_section)
+                if st.button("+ Add Section", key="add_section_button", on_click=add_section):
+                    pass  # The on_click callback handles the addition
+                
+                # Update the sections list for the final JSON
+                updated_sections = sections
             
             with tab2:
                 # Raw JSON editor
