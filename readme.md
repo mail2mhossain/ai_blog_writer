@@ -11,3 +11,8 @@ pip install -r requirements.txt
 ```bash
 conda remove --name ai_blog_writer --all
 ```
+
+### Run the App:
+```bash
+streamlit run app.py
+```
