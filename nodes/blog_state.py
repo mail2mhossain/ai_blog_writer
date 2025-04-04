@@ -102,6 +102,7 @@ class BlogState(TypedDict):
     article: str
     iteration: int
     critique: Optional[str]
+    user_critique: Optional[str]
     message: Optional[str]
     
 

@@ -46,8 +46,8 @@ def generate_structured_outline(state: BlogState) -> Command:
     })
 
     # print(f"Generated outline structure: {outline.model_dump()}")
-    with open("outline.md", "w") as f:
-        f.write(outline.model_dump_json(indent=4))
+    # with open("outline.md", "w") as f:
+    #     f.write(outline.model_dump_json(indent=4))
         
     return Command(
         update = {

@@ -3,7 +3,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import PromptTemplate
 from langgraph.types import Command
 from .blog_state import BlogState
-from .constants import CRITIQUE_PROMPT, REVISION, FINALIZATION_AND_PROOFREADING
+from .constants import CRITIQUE_PROMPT, REVISION,DRAFT_ARTICLE_APPROVAL, FINALIZATION_AND_PROOFREADING
 from .llm_object_provider import get_llm
 
 
@@ -27,10 +27,10 @@ def critique_article(state:BlogState) -> Command:
             update={
                 "critique": None,
             },
-            goto=FINALIZATION_AND_PROOFREADING
+            goto=DRAFT_ARTICLE_APPROVAL
         )
     else:
-        print(f"CRITIQUE: {critique_response}\n")
+        # print(f"CRITIQUE: {critique_response}\n")
         return Command(
             update={
                 "critique": critique_response,

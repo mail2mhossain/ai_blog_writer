@@ -15,8 +15,8 @@ def write_article(state:BlogState) -> Command:
     outline = state["outline"]
     # sources = state["sources"]
     web_sources = state["web_sources"]
-    web_sources = list(set(web_sources))
-    print(f"------Web sources: {len(web_sources)}------\n")
+    # web_sources = list(set(web_sources))
+    # print(f"------Web sources: {len(web_sources)}------\n")
 
     draft_prompt = PromptTemplate(
         template=DRAFT_PROMPT,
@@ -31,6 +31,9 @@ def write_article(state:BlogState) -> Command:
             "web_sources": str(web_sources)
         }
     )
+    # print(f"Draft Article written.\n")
+    # with open("draft.md", "w", encoding="utf-8") as file:
+    #     file.write(f"{article}\n")
 
     return Command(
         update={

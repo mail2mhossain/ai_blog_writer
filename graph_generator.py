@@ -1,4 +1,3 @@
-import sqlite3
 from langgraph.graph import StateGraph
 from langgraph.checkpoint.memory import MemorySaver
 # from langgraph.checkpoint.sqlite import SqliteSaver
@@ -14,7 +13,11 @@ from nodes.writer_node import write_article
 from nodes.critique_node import critique_article
 from nodes.revise_node import revise_article
 from nodes.finalization_and_proofreading_node import finalize_article
-from nodes.human_approval_node import title_approval, outline_approval
+from nodes.human_approval_node import (
+    title_approval, 
+    outline_approval, 
+    draft_article_approval
+)
 from nodes.constants import (
     TITLE_GENERATOR,
     THEME_DECOMPOSITION,
@@ -29,10 +32,11 @@ from nodes.constants import (
     REVISION,
     FINALIZATION_AND_PROOFREADING,
     TITLE_APPROVAL,
-    OUTLINE_APPROVAL
+    OUTLINE_APPROVAL,
+    DRAFT_ARTICLE_APPROVAL,
+    FINAL_ARTICLE_APPROVAL
 )
 
-# sqlite_conn = sqlite3.connect("checkpoints.sqlite", check_same_thread=False)
 # DB_URI = "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable"
 # postgres_saver = PostgresSaver.from_conn_string(DB_URI)
 # sqlite_saver = SqliteSaver(sqlite_conn)
@@ -52,6 +56,7 @@ def generate_graph():
     workflow.add_node(INTERNET_SEARCH, search_on_web)
     workflow.add_node(CONTINUE_TO_SEARCH, continue_to_search)
     workflow.add_node(DRAFT_WRITER, write_article)
+    workflow.add_node(DRAFT_ARTICLE_APPROVAL, draft_article_approval)
     workflow.add_node(CRITIC_ARTICLE, critique_article)
     workflow.add_node(REVISION, revise_article)
     workflow.add_node(FINALIZATION_AND_PROOFREADING, finalize_article)

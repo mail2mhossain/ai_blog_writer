@@ -10,6 +10,9 @@ def finalize_article(state:BlogState) -> Command:
     print(f"---FINALIZE ARTICLE---")
     article = state["article"]
 
+    # with open("draft_edited.md", "w") as f:
+    #     f.write(article)
+        
     finalize_prompt = PromptTemplate(
         template=FINALIZATION_AND_PROOFREADING_PROMPT,
         input_variables=["blog_post"]
@@ -21,8 +24,8 @@ def finalize_article(state:BlogState) -> Command:
         "blog_post": article,
     })
 
-    with open("finalized_article.md", "w") as f:
-        f.write(finalized_article)
+    # with open("finalized_article.md", "w") as f:
+    #     f.write(finalized_article)
 
         
     return Command(

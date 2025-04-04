@@ -9,16 +9,16 @@ from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain.retrievers.document_compressors import LLMChainExtractor
 from langchain_core.documents import Document
-from langchain_community.tools import DuckDuckGoSearchResults
-from docling.document_converter import DocumentConverter
+from tavily import TavilyClient
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from nodes.constants import INTERNET_SEARCH
 from .blog_state import BlogState, SearchState
 from .llm_object_provider import get_llm
+from decouple import config
 
+TAVILY_API_KEY = config("TAVILY_API_KEY")
 
-doc_converter = DocumentConverter()
-search = DuckDuckGoSearchResults(output_format="list")
+search_client = TavilyClient(api_key=TAVILY_API_KEY)
 
 llm = get_llm()
 
@@ -30,20 +30,6 @@ def get_from_llm(query):
     
     article_chain = article_prompt | llm | StrOutputParser()
     return article_chain.invoke({"query": query})
-
-
-def docling_url_loader(url: str) -> Document:
-    try:
-        doc = doc_converter.convert(url)
-        dox = Document(
-            page_content=doc.document.export_to_markdown(),
-        )
-
-        return [dox]
-    except requests.exceptions.HTTPError as e:
-        return [Document(page_content="")]
-    except Exception as e:
-        return [Document(page_content="")]
 
 
 def compress_context(doc, query):
@@ -74,20 +60,39 @@ def search_on_web(state:SearchState) -> SearchState:
     topic = state["topic"]
     print(f"------ RESEARCH ON {topic} [{state['search_count']}] ------")
 
-    search_results = search.invoke(topic)
-    search_urls = [results['link'] for results in search_results]
+    results = search_client.search(
+        query=topic,
+        topic="general",
+        max_results=3,
+        search_depth="advanced",
+        include_raw_content=True,
+        include_answer=True
+    )
 
+    urls=[]
+    raw_content = []
+    for result in results["results"]:
+        if result['url'] not in urls:
+            if result['raw_content']:
+                urls.append(result["url"])
+                # print(f"Raw Content:\n{result['raw_content']}\n")
+                dox = Document(
+                    page_content=result['raw_content'],
+                    metadata={"url": result["url"]}
+                )
+                raw_content.append(dox)
+    # print(f"Answer:\n{result['answer']}\n")
+    
     compressed_docs = []
     # Define a function that loads a URL and compresses its content
-    def process_url(url):
-        docs = docling_url_loader(url)
-        compressed = compress_context(docs, topic)
+    def process_url(dox):
+        compressed = compress_context(dox, topic)
         return compressed
 
     # Use ThreadPoolExecutor to process URLs in parallel
     with ThreadPoolExecutor() as executor:
         # Create a future for each URL processing task
-        future_to_url = {executor.submit(process_url, url): url for url in search_urls}
+        future_to_url = {executor.submit(process_url, dox): dox for dox in raw_content}
         
         # Collect results as they complete
         for future in as_completed(future_to_url):
@@ -97,9 +102,11 @@ def search_on_web(state:SearchState) -> SearchState:
                 compressed_docs.append(result)
 
     final_content = None
-    if compressed_docs:
-        final_content = compress_context(compressed_docs, topic)
-        final_content = final_content.page_content
+    for doc in compressed_docs:
+        if not final_content:
+            final_content = doc.page_content + "\n Source: " + doc.metadata["url"]
+        else:
+            final_content += "\n\n" + doc.page_content + "\n Source: " + doc.metadata["url"]
 
     if not final_content or (hasattr(final_content, 'page_content') and not final_content.page_content.strip()):
         final_content = get_from_llm(topic)

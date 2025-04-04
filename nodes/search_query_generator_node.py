@@ -51,8 +51,8 @@ def generate_search_query(state: BlogState) -> str:
     blog_outline = state.get("outline")
     key_points = extract_key_points(blog_outline)
 
-    with open("key_points.txt", "w") as f:
-        f.write(str(key_points))
+    # with open("key_points.txt", "w") as f:
+    #     f.write(str(key_points))
 
     # 1. Get embeddings using Sentence Transformers
     model = SentenceTransformer('all-MiniLM-L6-v2')  
@@ -106,18 +106,18 @@ def generate_search_query(state: BlogState) -> str:
 
     # 6) LOOP OVER CLUSTERS -> GENERATE QUERIES
     cluster_queries = []
-    with open("cluster_dict.txt", "w") as f:
-        for cluster_id, c_points in cluster_dict.items():
-            query = generate_google_search_query(c_points)
-            cluster_queries.append(query) 
-            f.write(f"Cluster {cluster_id}:\n")
-            f.write(str(c_points))
-            f.write("\n")
-            f.write(f"Query: {query}")
-            f.write("\n\n")
+    #with open("cluster_dict.txt", "w") as f:
+    for cluster_id, c_points in cluster_dict.items():
+        query = generate_google_search_query(c_points)
+        cluster_queries.append(query) 
+            # f.write(f"Cluster {cluster_id}:\n")
+            # f.write(str(c_points))
+            # f.write("\n")
+            # f.write(f"Query: {query}")
+            # f.write("\n\n")
 
-    with open("cluster_queries.txt", "w") as f:
-        f.write(str(cluster_queries))
+    # with open("cluster_queries.txt", "w") as f:
+    #     f.write(str(cluster_queries))
     # 7) Return the cluster queries
     return Command(
         update = {

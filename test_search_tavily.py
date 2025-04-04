@@ -1,109 +1,103 @@
-import numpy as np
-from sentence_transformers import SentenceTransformer
-from sklearn.metrics import silhouette_score
-from scipy.cluster.hierarchy import linkage, fcluster
-from langchain_openai import ChatOpenAI
-from langchain_core.prompts import PromptTemplate
-from langchain_core.output_parsers import StrOutputParser
 from decouple import config
-import warnings
+from tavily import TavilyClient
+from langchain.retrievers.document_compressors import LLMChainExtractor
+from langchain_core.documents import Document
+from docling.document_converter import DocumentConverter
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from nodes.llm_object_provider import get_llm
 
-warnings.filterwarnings("ignore")
 
-GPT_MODEL = config('GPT_MODEL', default='gpt-3.5-turbo')
-OPENAI_API_KEY = config('OPENAI_API_KEY')
+TAVILY_API_KEY = config("TAVILY_TIGER_API_KEY")
 
-llm = ChatOpenAI(model_name=GPT_MODEL, temperature=0.7, openai_api_key=OPENAI_API_KEY)
+search_client = TavilyClient(api_key=TAVILY_API_KEY)
+doc_converter = DocumentConverter()
+llm = get_llm()
 
-def generate_google_search_query(cluster_points):
-    """
-    Example function that calls an LLM to create a search query
-    based on the content of the cluster.
-    """
-    # We'll create a short prompt that summarizes the cluster
-    # and asks for a relevant Google search query.
-    prompt_text = """
-    The following key points are semantically related:
-    {cluster_points}
+def docling_url_loader(url: str) -> Document:
+    try:
+        doc = doc_converter.convert(url)
+        dox = Document(
+            page_content=doc.document.export_to_markdown(),
+        )
 
-    Combine the all key points and provide a concise Google search query
-    that would capture the whole key points.
-    Return only the query, nothing else.
-    """
+        return [dox]
+    except requests.exceptions.HTTPError as e:
+        return [Document(page_content="")]
+    except Exception as e:
+        return [Document(page_content="")]
 
-    prompt = PromptTemplate(
-        template=prompt_text,
-        input_variables=["cluster_points"]
+
+def compress_context(doc, query):
+    print(f"Entering in CONTEXT COMPRESSOR:\n")
+
+    compressor = LLMChainExtractor.from_llm(llm=llm)
+    
+    # Check if doc is a list of Document objects or a single Document
+    if isinstance(doc, list):
+        # If it's already a list of Documents, use it directly
+        docs_to_compress = doc
+    elif hasattr(doc, 'page_content'):
+        # If it's a single Document object
+        docs_to_compress = [doc]
+    else:
+        # If it's a list of something else (like tuples or strings), convert to Documents
+        docs_to_compress = [Document(page_content=str(item)) for item in doc if item]
+
+    compressed_docs = compressor.compress_documents(docs_to_compress, query)
+
+    if compressed_docs:
+        return compressed_docs[0]
+    else:
+        return Document(page_content="")
+
+
+topic = "Stellar life cycle stages Main Sequence duration importance to understanding universe age composition evolution"
+
+results = search_client.search(
+        query=topic,
+        topic="general",
+        max_results=5,
+        search_depth="advanced",
+        include_raw_content=True,
+        include_answer=True
     )
-    chain = prompt | llm | StrOutputParser()
 
-    query_text = chain.invoke({
-        "cluster_points": cluster_points,
-    })
-
-    return query_text
-
-
-file_path = "key_points.txt"
-
-with open(file_path, "r", encoding="utf-8") as file:
-    key_points_list = [line.strip() for line in file.readlines()]
-
-# 1. Get embeddings using Sentence Transformers
-model = SentenceTransformer('all-MiniLM-L6-v2')  
-embeddings = model.encode(key_points_list)  # Returns a list of embeddings (np.ndarray)
-
-# 2. Compute the linkage matrix using, for example, the Ward method
-Z = linkage(embeddings, method='ward')  # shape: (num_points-1, 4)
-
-# Z[i, 2] is the distance at which the merge occurs at the i-th step
-
-# 3. Build a sorted list of candidate distance thresholds
-#    We'll take the unique distances in Z[:, 2].
-all_distances = Z[:, 2]
-unique_distances = np.unique(all_distances)
-
-candidate_thresholds = unique_distances
-
-print(f"Number of candidate thresholds: {len(candidate_thresholds)}")
-
-best_threshold = None
-best_score = -1
-best_labels = None
-
-# 4. Evaluate silhouette score for each candidate threshold
-for t in candidate_thresholds:
-    # Generate cluster labels for this threshold
-    labels = fcluster(Z, t=t, criterion='distance')
+urls=[]
+raw_content = []
+for result in results["results"]:
+    if result['url'] not in urls:
+        urls.append(result["url"])
+        print(f"URL: {result['url']}\n")
+    # print(f"Keys:\n{result.keys()}\n")
+    # print(f"type: {type(result)}")
+    # print(f"Results:\n{result}\n")
+        if result['raw_content']:
+            # print(f"Raw Content:\n{result['raw_content']}\n")
+            # raw_content.append(result['raw_content'])
+            dox = Document(
+                page_content=result['raw_content'],
+            )
+            raw_content.append(dox)
+    # print(f"Answer:\n{result['answer']}\n")
     
-    # If all points end up in a single cluster or if each point is its own cluster,
-    # silhouette_score is not defined. We'll skip those cases.
-    num_clusters = len(np.unique(labels))
-    if num_clusters < 2 or num_clusters == len(labels):
-        continue
+
+print(f"Total Raw Content: {len(raw_content)}")
+compressed_docs = []
+# Define a function that loads a URL and compresses its content
+def process_url(dox):
+    compressed = compress_context(dox, topic)
+    print(f"\nCompressed Content:\n{compressed}\n")
+    return compressed
+
+# Use ThreadPoolExecutor to process URLs in parallel
+with ThreadPoolExecutor() as executor:
+    # Create a future for each URL processing task
+    future_to_url = {executor.submit(process_url, dox): dox for dox in raw_content}
     
-    score = silhouette_score(embeddings, labels)
-    
-    if score > best_score:
-        best_score = score
-        best_threshold = t
-        best_labels = labels
-
-print(f"Best threshold found: {best_threshold:.4f}")
-print(f"Best silhouette score: {best_score:.4f}")
-
-# 5. Now 'best_labels' contains the clustering at the best threshold
-#    We can group the key points using these labels
-cluster_dict = {}
-for kp, lbl in zip(key_points_list, best_labels):
-    cluster_dict.setdefault(lbl, []).append(kp)
-
-# Let's see how many clusters we got
-print(f"Number of clusters: {len(cluster_dict)}")
-
-
-# 6) LOOP OVER CLUSTERS -> GENERATE QUERIES
-cluster_queries = []
-for cluster_id, c_points in cluster_dict.items():
-    query = generate_google_search_query(c_points)
-    print(f"Cluster {cluster_id}: {query}\n")
+    # Collect results as they complete
+    for future in as_completed(future_to_url):
+        result = future.result()
+        
+        if result and hasattr(result, 'page_content') and result.page_content.strip():
+            compressed_docs.append(result)
+# sources[topic] = urls

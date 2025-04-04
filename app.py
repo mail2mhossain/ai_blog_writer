@@ -2,10 +2,10 @@ import os
 import io
 import re
 import json
-import uuid 
+import uuid
+import markdown
 import zipfile
 import asyncio
-import sys
 from pathlib import Path
 
 # Fix for event loop error
@@ -20,9 +20,8 @@ os.environ['STREAMLIT_SERVER_HEADLESS'] = 'true'
 os.environ['STREAMLIT_SERVER_FILE_WATCHER_TYPE'] = 'none'
 
 import streamlit as st
-import streamlit.components.v1 as components
-import pandas as pd
-from graph_executer import generate_title, generate_outline, generate_article
+from graph_executer import generate_title, generate_outline, generate_article, finalize_article
+from nodes.blog_state import BlogOutline
 from dotenv import load_dotenv, set_key
 from decouple import config
 from decouple import AutoConfig
@@ -43,6 +42,8 @@ if 'selected_title' not in st.session_state:
     st.session_state['selected_title'] = ""
 if 'edited_title' not in st.session_state:
     st.session_state['edited_title'] = ""
+if 'tavily_api_key' not in st.session_state:
+    st.session_state['tavily_api_key'] = config("TAVILY_API_KEY", default="")
 if 'openai_api_key' not in st.session_state:
     st.session_state['openai_api_key'] = config("OPENAI_API_KEY", default="")
 if 'gpt_model' not in st.session_state:
@@ -436,7 +437,7 @@ def execute_generate_outline():
                 
                 # Store the outline in session state
                 st.session_state['outline'] = outline_json
-                print(f"\nBlog Outline:\n{st.session_state['outline']}")
+                # print(f"\nBlog Outline:\n{st.session_state['outline']}")
                 
                 # Parse the outline JSON and store in session state
                 st.session_state['outline_data'] = json.loads(outline_json)
@@ -444,12 +445,112 @@ def execute_generate_outline():
                 # Convert to markdown for display and editing
                 markdown_outline = outline_to_markdown(outline)
                 st.session_state['markdown_outline'] = markdown_outline
+                
+                # Hide the title section
+                st.session_state['show_title_section'] = False
+                
+                # Clear the title data but keep the final title
+                st.session_state['titles'] = []
+                st.session_state['topic'] = ""
+                
+                # Rerun to refresh the UI
+                st.rerun()
             except Exception as e:
                 import traceback
                 st.error(f"Error generating outline: {str(e)}")
                 print(f"Error details: {traceback.format_exc()}")
         else:
             st.error("Please select or edit a title first.")
+
+def execute_generate_article():
+    with st.spinner("Researching and Drafting Article..."):
+        try:
+            # Convert the processed outline to a BlogOutline object if it's not already
+            if not isinstance(st.session_state['processed_outline'], BlogOutline):
+                try:
+                    # If it's a dictionary, convert it to a BlogOutline object
+                    outline_dict = st.session_state['processed_outline']
+                    blog_outline = BlogOutline(**outline_dict)
+                    st.session_state['processed_outline'] = blog_outline
+                    # st.success("Outline converted to BlogOutline successfully!")
+                except Exception as e:
+                    st.error(f"Failed to convert outline to BlogOutline: {str(e)}")
+                    return
+            
+            # Generate the article using the processed outline
+            st.success("Researching and Drafting article...")
+            article = generate_article(st.session_state['processed_outline'], st.session_state['thread_id'])
+            
+            # Store the article in session state
+            st.session_state['generated_article'] = article
+            
+            # Initialize critique if not already present
+            if 'article_critique' not in st.session_state:
+                st.session_state['article_critique'] = ""
+                
+            # Initialize edited article if not already present
+            if 'edited_article' not in st.session_state:
+                st.session_state['edited_article'] = article
+                
+            # Set flags to show only article section
+            st.session_state['show_article_section'] = True
+            st.session_state['show_outline_only'] = False
+            st.session_state['show_article_only'] = True
+            
+            # Rerun to display the article section
+            st.rerun()
+        except Exception as e:
+            import traceback
+            st.error(f"Error generating article: {str(e)}")
+            print(f"Error details: {traceback.format_exc()}")
+
+def execute_finalize_article():
+    with st.spinner("Finalizing the article..."):
+        st.success("Finalizing the article...")
+        article = finalize_article(st.session_state['edited_article'], st.session_state['article_critique'], st.session_state['thread_id'])
+        
+        # Store the finalized article in session state
+        st.session_state['finalized_article'] = article
+        st.session_state['show_final_article'] = True
+        
+        # Rerun to display the finalized article
+        st.rerun()
+
+
+def display_article_critique():
+    """Display the draft article with critique capabilities"""
+    # Display the draft article
+    st.subheader("Draft Article")
+    st.markdown(st.session_state['edited_article'])
+    
+    # Message for user guidance
+    st.markdown("**Provide critique in the box below.**")
+    
+    # Critique text box
+    critique = st.text_area(
+        "Critique (optional):", 
+        value=st.session_state.get('article_critique', ''),
+        height=150,
+        key="critique_box",
+        help="Provide feedback or suggestions for improving the article"
+    )
+    st.session_state['article_critique'] = critique
+    
+    # Submit button for the article and critique
+    if st.button("Submit Critique"):
+        try:
+            execute_finalize_article()
+        except Exception as e:
+            st.error(f"Error submitting article: {str(e)}")
+
+# This function is no longer needed as its functionality has been moved directly into write_blog
+# Keeping it as a placeholder to avoid breaking any other code that might call it
+def display_article_section():
+    """This function is deprecated. Its functionality has been moved into write_blog."""
+    # Simply redirect to the appropriate section in write_blog by setting flags
+    if not st.session_state.get('show_article_section', False):
+        st.session_state['show_article_section'] = True
+        st.rerun()
 
 # Title of the app
 st.title("Blog Magic: AI Content Creation")
@@ -468,45 +569,181 @@ def write_blog():
         st.session_state['edited_title'] = ""
     if 'markdown_outline' not in st.session_state:
         st.session_state['markdown_outline'] = ""
+    if 'show_title_section' not in st.session_state:
+        st.session_state['show_title_section'] = True
+    if 'show_article_section' not in st.session_state:
+        st.session_state['show_article_section'] = False
+    if 'show_outline_only' not in st.session_state:
+        st.session_state['show_outline_only'] = False
+    if 'show_article_only' not in st.session_state:
+        st.session_state['show_article_only'] = False
     
-    with st.form(key='query_form'):
-        topic = st.text_input("Enter your topic:", value=st.session_state['topic'], key="topic_input")
-        submit_button = st.form_submit_button(label="Write Article", on_click=execute_generate_title)
+    # Check if we should show the article section (highest priority)
+    if 'generated_article' in st.session_state and st.session_state.get('show_article_section', False):
+        # Check if we have a finalized article to display
+        if st.session_state.get('show_final_article', False) and 'finalized_article' in st.session_state:
+            st.subheader("Final Article")
+            
+            # Display the finalized article in markdown format
+            st.markdown(st.session_state['finalized_article'])
+            
+            # Add download buttons for the final article
+            article_title = st.session_state.get('edited_title', 'article')
+            safe_filename_md = sanitize_filename(article_title) + ".md"
+            safe_filename_pdf = sanitize_filename(article_title) + ".pdf"
+            
+            # Create columns for the download buttons
+            col1, col2 = st.columns(2)
+            
+            # Create a download button for the markdown file
+            with col1:
+                download_key_md = str(uuid.uuid4())
+                st.download_button(
+                    label="Download as Markdown",
+                    data=st.session_state['finalized_article'],
+                    file_name=safe_filename_md,
+                    mime="text/markdown",
+                    key=download_key_md
+                )
+            
+            # Create a button to view as HTML (which can be printed as PDF)
+            with col2:
+                # Convert markdown to HTML with styling
+                html = markdown.markdown(st.session_state['finalized_article'])
+                html_content = f"""<!DOCTYPE html>
+                <html>
+                <head>
+                    <title>{article_title}</title>
+                    <style>
+                        body {{ font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }}
+                        h1 {{ color: #333366; }}
+                        h2 {{ color: #333366; margin-top: 30px; }}
+                        h3 {{ color: #333366; }}
+                        p {{ margin-bottom: 20px; }}
+                        img {{ max-width: 100%; height: auto; }}
+                        @media print {{
+                            body {{ margin: 1cm; }}
+                        }}
+                    </style>
+                    <script>
+                        window.onload = function() {{
+                            // Add a print button
+                            var printBtn = document.createElement('button');
+                            printBtn.innerHTML = 'Print as PDF';
+                            printBtn.style.padding = '10px 20px';
+                            printBtn.style.backgroundColor = '#4CAF50';
+                            printBtn.style.color = 'white';
+                            printBtn.style.border = 'none';
+                            printBtn.style.borderRadius = '4px';
+                            printBtn.style.cursor = 'pointer';
+                            printBtn.style.marginBottom = '20px';
+                            printBtn.onclick = function() {{
+                                this.style.display = 'none';
+                                window.print();
+                                this.style.display = 'block';
+                            }};
+                            document.body.insertBefore(printBtn, document.body.firstChild);
+                        }};
+                    </script>
+                </head>
+                <body>
+                    {html}
+                </body>
+                </html>"""
+                
+                # Create download button for HTML
+                download_key_html = str(uuid.uuid4())
+                st.download_button(
+                    label="View as HTML/Print PDF",
+                    data=html_content,
+                    file_name=safe_filename_pdf.replace('.pdf', '.html'),
+                    mime="text/html",
+                    key=download_key_html
+                )
+            
+            # Add a button to start over
+            if st.button("Start New Article"):
+                # Clear all data and show title section again
+                st.session_state['outline'] = ""
+                st.session_state['markdown_outline'] = ""
+                st.session_state['generated_article'] = ""
+                st.session_state['edited_article'] = ""
+                st.session_state['article_critique'] = ""
+                st.session_state['finalized_article'] = ""
+                st.session_state['show_title_section'] = True
+                st.session_state['show_article_section'] = False
+                st.session_state['show_final_article'] = False
+                st.session_state['show_article_only'] = False
+                st.rerun()
+        else:
+            # Display the article and critique functionality
+            display_article_critique()
+            
+            # Show a button to start over completely
+            if st.button("Start Over with New Topic", key="start_over_from_article"):
+                # Clear all data and show title section again
+                st.session_state['outline'] = ""
+                st.session_state['markdown_outline'] = ""
+                st.session_state['generated_article'] = ""
+                st.session_state['edited_article'] = ""
+                st.session_state['article_critique'] = ""
+                st.session_state['show_title_section'] = True
+                st.session_state['show_article_section'] = False
+                st.session_state['show_outline_only'] = False
+                st.session_state['show_article_only'] = False
+                st.rerun()
     
-    # Display titles after form submission if titles are available
-    if 'titles' in st.session_state and st.session_state['titles']:
-        st.subheader("Generated Titles")
+    # Check if we should show the outline section (medium priority)
+    elif 'outline' in st.session_state and st.session_state['outline'] and not st.session_state['show_title_section']:
+        # Show a button to start over from outline
+        if st.button("Start Over with New Topic", key="start_over_from_outline"):
+            # Clear outline and show title section again
+            st.session_state['outline'] = ""
+            st.session_state['markdown_outline'] = ""
+            st.session_state['show_title_section'] = True
+            st.session_state['show_outline_only'] = False
+            st.rerun()
+    
+    # Show the title section (lowest priority)
+    else:
+        # Show the title section
+        with st.form(key='query_form'):
+            topic = st.text_input("Enter your topic:", value=st.session_state['topic'], key="topic_input")
+            submit_button = st.form_submit_button(label="Write Article", on_click=execute_generate_title)
         
-        # Get the titles from session state - they should already be a proper list from graph_executer.py
-        titles = st.session_state['titles']
-        
-        # Set the initial selected title to the first one if not already set
-        if not st.session_state['selected_title'] and titles:
-            st.session_state['selected_title'] = titles[0]
-            st.session_state['edited_title'] = titles[0]
-        
-        # Display the titles as radio options
-        st.radio("", titles, key="title_options", on_change=update_selected_title, index=0)
-        
-        # Message to guide user
-        st.markdown("**Select one title from above and edit if required. After that press submit button.**")
-        
-        # Text box for editing the selected title
-        # The value will be automatically stored in st.session_state['edited_title']
-        st.text_input("Edit Title:", value=st.session_state['selected_title'], key="edited_title")
-        
-        # Submit button for generating outline
-        if st.button("Submit Title"):
-            if st.session_state['edited_title']:
-                # titles = []
-                # st.session_state['selected_title'] = ''
-                # st.session_state['edited_title'] = ''
-                execute_generate_outline()
-            else:
-                st.error("Please enter a title before submitting.")
+        # Display titles after form submission if titles are available
+        if 'titles' in st.session_state and st.session_state['titles']:
+            st.subheader("Generated Titles")
+            
+            # Get the titles from session state - they should already be a proper list from graph_executer.py
+            titles = st.session_state['titles']
+            
+            # Set the initial selected title to the first one if not already set
+            if not st.session_state['selected_title'] and titles:
+                st.session_state['selected_title'] = titles[0]
+                st.session_state['edited_title'] = titles[0]
+            
+            # Display the titles as radio options
+            st.radio("", titles, key="title_options", on_change=update_selected_title, index=0)
+            
+            # Message to guide user
+            st.markdown("**Select one title from above and edit if required. After that press submit button.**")
+            
+            # Text box for editing the selected title
+            # Only set the key, and let Session State handle the value
+            st.text_input("Edit Title:", key="edited_title")
+            
+            # Submit button for generating outline
+            if st.button("Submit Title"):
+                if st.session_state['edited_title']:
+                    # Set flag to show only outline after generation
+                    st.session_state['show_outline_only'] = True
+                    execute_generate_outline()
+                else:
+                    st.error("Please enter a title before submitting.")
     
     # Display outline for editing if available
-    if 'outline' in st.session_state and st.session_state['outline']:
+    if 'outline' in st.session_state and st.session_state['outline'] and st.session_state.get('show_outline_only', False):
         st.subheader("Blog Outline")
         st.markdown("**Edit the outline below as needed:**")
         
@@ -653,10 +890,8 @@ def write_blog():
                     # Store the processed outline
                     st.session_state['processed_outline'] = final_outline
                     
-                    # Here you would normally call the function to generate the article
-                    st.success("Outline submitted successfully! Article generation would start here.")
-                    # Uncomment the line below when ready to implement article generation
-                    # execute_generate_article()
+                    # Display a message and start article generation
+                    execute_generate_article()  
                 except Exception as e:
                     st.error(f"Error processing outline: {str(e)}")
         except Exception as e:
@@ -680,14 +915,18 @@ def configuration_content():
     st.subheader("Configuration")
 
     # Input fields for API key and model name
-    api_key_input = st.text_input("OpenAI API Key", value=st.session_state['openai_api_key'], type="password")
+    tavily_api_key_input = st.text_input("Tavily API Key", value=st.session_state['tavily_api_key'], type="password")
+    openai_api_key_input = st.text_input("OpenAI API Key", value=st.session_state['openai_api_key'], type="password")
     model_options = ["gpt-4o", "gpt-4o-mini", "o3-mini", "gpt-3.5-turbo"]
     model_name_input = st.selectbox("OpenAI Model Name", options=model_options, index=model_options.index(st.session_state['gpt_model']) if st.session_state['gpt_model'] in model_options else 0)
     def save_configuration():
         # Update session state with the new configuration values
-        st.session_state['openai_api_key'] = api_key_input
+        st.session_state['tavily_api_key'] = tavily_api_key_input
+        st.session_state['openai_api_key'] = openai_api_key_input
         st.session_state['gpt_model'] = model_name_input
-        update_env_variable("OPENAI_API_KEY", api_key_input)
+
+        update_env_variable("TAVILY_API_KEY", tavily_api_key_input)
+        update_env_variable("OPENAI_API_KEY", openai_api_key_input)
         update_env_variable("GPT_MODEL", model_name_input)
         st.success("Configuration saved successfully!")
 
