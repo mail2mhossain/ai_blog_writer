@@ -2,7 +2,7 @@
 conda create --prefix Z:\\conda_env\\ai_blog_writer Python=3.11 -y && conda activate Z:\conda_env\ai_blog_writer
 
 
-### Install requirements.txt:
+### Install requirements:
 ```bash
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 

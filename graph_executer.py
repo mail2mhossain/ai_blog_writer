@@ -88,6 +88,6 @@ def finalize_article(article, critique, thread_id):
    
     # output = graph.invoke(None, config=config)
     # print(f"\nFinalized Article:\n{output['article']}\n")
-    return output["article"]
+    return output["title"], output["article"]
     
 

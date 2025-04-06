@@ -507,10 +507,11 @@ def execute_generate_article():
 def execute_finalize_article():
     with st.spinner("Finalizing the article..."):
         st.success("Finalizing the article...")
-        article = finalize_article(st.session_state['edited_article'], st.session_state['article_critique'], st.session_state['thread_id'])
+        title, article = finalize_article(st.session_state['edited_article'], st.session_state['article_critique'], st.session_state['thread_id'])
         
         # Store the finalized article in session state
         st.session_state['finalized_article'] = article
+        st.session_state['edited_title'] = title
         st.session_state['show_final_article'] = True
         
         # Rerun to display the finalized article
@@ -519,9 +520,24 @@ def execute_finalize_article():
 
 def display_article_critique():
     """Display the draft article with critique capabilities"""
-    # Display the draft article
     st.subheader("Draft Article")
-    st.markdown(st.session_state['edited_article'])
+    
+    # Create two tabs - one for viewing and one for editing
+    view_tab, edit_tab = st.tabs(["View Article", "Edit Article"])
+    
+    # Tab 1: View the draft article
+    with view_tab:
+        st.markdown(st.session_state['edited_article'])
+    
+    # Tab 2: Edit the draft article
+    with edit_tab:
+        edited_article = st.text_area(
+            "Edit Article:",
+            value=st.session_state['edited_article'],
+            height=500,
+            key="article_editor"
+        )
+        st.session_state['edited_article'] = edited_article
     
     # Message for user guidance
     st.markdown("**Provide critique in the box below.**")
