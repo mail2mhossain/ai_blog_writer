@@ -81,10 +81,11 @@ def finalize_article(article, critique, thread_id):
         }
     }
  
-    # update_state = {"article": article, "user_critique": critique}
+    update_state = {"article": article, "user_critique": critique}
     # graph.update_state(config, update_state, as_node=DRAFT_ARTICLE_APPROVAL)
     # print("State updated")
-    output = graph.invoke(Command(resume=critique), config=config)
+    output = graph.invoke(Command(update=update_state, resume=critique), config=config)
+   
     # output = graph.invoke(None, config=config)
     # print(f"\nFinalized Article:\n{output['article']}\n")
     return output["article"]

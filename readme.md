@@ -4,6 +4,14 @@ conda create --prefix Z:\\conda_env\\ai_blog_writer Python=3.11 -y && conda acti
 
 ### Install requirements.txt:
 ```bash
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+pip install git+https://github.com/huggingface/transformers
+
+
+pip install git+https://github.com/huggingface/accelerate
+
+
 pip install -r requirements.txt
 ```
 
